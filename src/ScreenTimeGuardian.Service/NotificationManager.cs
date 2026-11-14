@@ -53,6 +53,29 @@ public static class NotificationManager
         _ = Task.Run(() => ShowBalloon(title, message, seconds));
     }
 
+    // Parent PIN unlock must tear down any live card too: a countdown still
+    // running after an unlock tells the child they are locked when they are
+    // not. The PS loop compares its start time against this sentinel file's
+    // timestamp every tick and exits if a cancel landed after it started —
+    // so a later card is never killed by an older cancel.
+    private static readonly string CardCancelFile = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
+        "ScreenTimeGuardian", "ipc", "STG_CARD_CANCEL");
+
+    public static void CancelCards()
+    {
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(CardCancelFile)!);
+            File.WriteAllText(CardCancelFile, DateTime.UtcNow.ToString("o"));
+        }
+        catch (Exception ex)
+        {
+            GuardLog.Warn($"could not write card cancel sentinel: {ex.Message}");
+        }
+    }
+
+    // ISO-8601 round-trip strings compare correctly as PS [datetime] values.
     private static void ShowBalloon(string title, string message, int seconds)
     {
         var scriptPath = Path.Combine(
@@ -84,6 +107,8 @@ public static class NotificationManager
             "$f.ClientSize = [System.Drawing.Size]::New(420, 78)",
             "$f.Location = [System.Drawing.Point]::New($w.Width - 440, 20)",
             "$left = " + seconds,
+            "$cancelFile = 'C:\\\\ProgramData\\\\ScreenTimeGuardian\\\\ipc\\\\STG_CARD_CANCEL'",
+            "$startedAt = Get-Date",
             "$closeBtn = New-Object System.Windows.Forms.Button",
             "$closeBtn.Text = 'x'; $closeBtn.ForeColor = [System.Drawing.Color]::White",
             "$closeBtn.BackColor = [System.Drawing.Color]::FromArgb(30,30,30)",
@@ -92,6 +117,7 @@ public static class NotificationManager
             "$f.Controls.Add($closeBtn)",
             "$f.Show()",
             "while ($left -gt 0) {",
+            "  if (Test-Path $cancelFile) { $ct = [datetime](Get-Content $cancelFile); if ($ct -ge $startedAt) { break } }",
             "  $f.TopMost = $true",
             "  $lbl.Text = $title",
             "  $sub.Text = ('{0}  |  locks in {1}s' -f $msg, $left)",
