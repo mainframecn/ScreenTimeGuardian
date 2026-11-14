@@ -90,6 +90,7 @@ public static class NotificationManager
         // TopMost alone loses z-order over fullscreen apps (games), so the loop
         // re-asserts it every half-second tick.
         var script = string.Join(Environment.NewLine, [
+            "$ErrorActionPreference = 'Stop'; try {",
             "Add-Type -AssemblyName System.Windows.Forms,System.Drawing",
             "$f = New-Object System.Windows.Forms.Form",
             "$f.Text = 'ScreenTime Guardian'",
@@ -126,7 +127,8 @@ public static class NotificationManager
             "  Start-Sleep -Milliseconds 500",
             "  $left--",
             "}",
-            "if (-not $f.IsDisposed) { $f.Close() }"
+            "if (-not $f.IsDisposed) { $f.Close() }",
+            "} catch { Add-Content -LiteralPath 'C:\\ProgramData\\ScreenTimeGuardian\\logs\\card_error.log' -Value ((Get-Date).ToString('s') + ' | ' + $_); exit 1 }"
         ]);
 
         try
@@ -155,7 +157,11 @@ public static class NotificationManager
             }
 
             var exited = process.WaitForExit((seconds + 15) * 1000);
-            GuardLog.Info($"notification card shown for {seconds}s exited={exited} code={process.ExitCode}");
+            // ExitCode throws for a Process obtained via GetProcessById (SessionLauncher
+            // path) - guard it or the real card outcome never reaches the log.
+            int code;
+            try { code = process.ExitCode; } catch { code = -1; }
+            GuardLog.Info($"notification card shown for {seconds}s exited={exited} code={code}");
         }
         catch (Exception ex)
         {
