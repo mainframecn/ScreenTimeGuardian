@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Runtime.InteropServices;
 using System.Windows;
 using ScreenTimeGuardian.Shared;
 using WinForms = System.Windows.Forms;
@@ -44,11 +45,10 @@ public partial class App : System.Windows.Application
 
         foreach (var screen in screens)
         {
-            var bounds = BoundsInWindowUnits(screen);
-            // Per-display scale factors for the log line below; derived inside
-            // BoundsInWindowUnits, so recompute cheaply here rather than widen
-            // its signature.
-            var scaleX = Math.Max(GetDisplayDpi(screen), 1) / 96.0;
+            var (dpiX, dpiY) = GetDisplayDpi(screen);
+            var scaleX = Math.Max(dpiX, 1) / 96.0;
+            var scaleY = Math.Max(dpiY, 1) / 96.0;
+            var bounds = BoundsInWindowUnits(screen, scaleX, scaleY);
             var window = new LockMainWindow(durationMinutes, parentPin, screen.Primary, bounds);
 
             _windows.Add(window);
@@ -63,17 +63,41 @@ public partial class App : System.Windows.Application
         }
     }
 
-    // WinForms reports pixel bounds plus each display's own DPI. WPF measures in
-    // device-independent units (96 per inch), so each display has to be divided
-    // by its own scale: a display set to 150 percent scaling is not the same
-    // size in units as one at 100 percent. DpiX/DpiY are instance properties
-    // on Screen, so they are read from the screen object itself.
-    private static Rect BoundsInWindowUnits(WinForms.Screen screen)
+    // WinForms' Screen type has no DPI members at all, so the per-display
+    // scale comes from the monitor API instead: MonitorFromRect locates the
+    // monitor holding the screen's bounds and GetDpiForMonitor (shcore,
+    // Windows 8.1+) reports its effective DPI. Fallbacks keep the overlay
+    // placing itself rather than failing to start: system DPI, then 96.
+    private static (uint DpiX, uint DpiY) GetDisplayDpi(WinForms.Screen screen)
     {
-        var scaleX = Math.Max(screen.DpiX, 1) / 96.0;
-        var scaleY = Math.Max(screen.DpiY, 1) / 96.0;
-        var bounds = screen.Bounds;
+        var b = screen.Bounds;
+        var rect = new RECT
+        {
+            left = b.X,
+            top = b.Y,
+            right = b.X + b.Width,
+            bottom = b.Y + b.Height
+        };
 
+        var monitor = MonitorFromRect(ref rect, MONITOR_DEFAULTTONEAREST);
+        if (monitor != IntPtr.Zero &&
+            GetDpiForMonitor(monitor, MDT_EFFECTIVE_DPI, out var dpiX, out var dpiY) == 0 &&
+            dpiX > 0 && dpiY > 0)
+        {
+            return (dpiX, dpiY);
+        }
+
+        var system = GetDpiForSystem();
+        return system > 0 ? (system, system) : (96u, 96u);
+    }
+
+    // WinForms reports pixel bounds; WPF measures in device-independent units
+    // (96 per inch), so each display is divided by its own scale: a display
+    // set to 150 percent scaling is not the same size in units as one at 100
+    // percent.
+    private static Rect BoundsInWindowUnits(WinForms.Screen screen, double scaleX, double scaleY)
+    {
+        var bounds = screen.Bounds;
         return new Rect(
             bounds.X / scaleX,
             bounds.Y / scaleY,
@@ -87,4 +111,27 @@ public partial class App : System.Windows.Application
         _inputBlocker?.StopBlocking();
         base.OnExit(e);
     }
+
+    // --- per-display DPI plumbing -----------------------------------------
+
+    private const uint MONITOR_DEFAULTTONEAREST = 2;
+    private const int MDT_EFFECTIVE_DPI = 0;
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct RECT
+    {
+        public int left;
+        public int top;
+        public int right;
+        public int bottom;
+    }
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr MonitorFromRect(ref RECT lprc, uint dwFlags);
+
+    [DllImport("shcore.dll")]
+    private static extern int GetDpiForMonitor(IntPtr hmonitor, int dpiType, out uint dpiX, out uint dpiY);
+
+    [DllImport("user32.dll")]
+    private static extern uint GetDpiForSystem();
 }
