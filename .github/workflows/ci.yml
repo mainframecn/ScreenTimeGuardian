@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+# Single build per run; cancel stale runs on new pushes to the same ref.
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DOTNET_CLI_TELEMETRY_OPTOUT: 'true'
+  DOTNET_NOLOGO: 'true'
+
+jobs:
+  build:
+    name: Build & test
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.4xx'
+
+      - name: Restore
+        run: dotnet restore ScreenTimeGuardian.sln
+
+      - name: Build
+        run: dotnet build ScreenTimeGuardian.sln -c Debug
+
+      - name: Publish (release)
+        run: dotnet publish src/ScreenTimeGuardian.Service/ScreenTimeGuardian.Service.csproj -c Release -o ${{ github.workspace }}/publish-ci
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ScreenTimeGuardian-build
+          path: |
+            ${{ github.workspace }}/publish-ci/
+          if-no-files-found: error

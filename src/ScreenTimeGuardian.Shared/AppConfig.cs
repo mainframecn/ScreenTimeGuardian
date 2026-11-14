@@ -20,22 +20,45 @@ public class AppConfig
 
     public static AppConfig Load()
     {
-        if (!File.Exists(ConfigPath))
+        // A half-written config.json (crash mid-save) must not take the service
+        // down with it: an unhandled exception here becomes a watchdog-driven
+        // crash loop. Fall back to defaults and say so in the log instead.
+        try
         {
-            var defaultConfig = new AppConfig();
-            defaultConfig.Save();
-            return defaultConfig;
-        }
+            if (!File.Exists(ConfigPath))
+            {
+                var defaultConfig = new AppConfig();
+                defaultConfig.Save();
+                return defaultConfig;
+            }
 
-        var json = File.ReadAllText(ConfigPath);
-        return JsonSerializer.Deserialize<AppConfig>(json) ?? new AppConfig();
+            var json = File.ReadAllText(ConfigPath);
+            return JsonSerializer.Deserialize<AppConfig>(json) ?? new AppConfig();
+        }
+        catch (Exception ex)
+        {
+            GuardLog.Error($"config load failed, using defaults ({ConfigPath})", ex);
+            return new AppConfig();
+        }
     }
 
     public void Save()
     {
         Directory.CreateDirectory(ConfigDir);
         var json = JsonSerializer.Serialize(this, new JsonSerializerOptions { WriteIndented = true });
-        File.WriteAllText(ConfigPath, json);
+
+        // Write-temp-then-rename: a crash mid-write must leave either the old
+        // file or the new one, never a truncated one.
+        var tmp = ConfigPath + ".tmp";
+        File.WriteAllText(tmp, json);
+        if (File.Exists(ConfigPath))
+        {
+            File.Replace(tmp, ConfigPath, null);
+        }
+        else
+        {
+            File.Move(tmp, ConfigPath);
+        }
     }
 
     public static string GetConfigPath() => ConfigPath;
