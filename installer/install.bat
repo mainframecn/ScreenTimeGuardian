@@ -81,7 +81,7 @@ echo [4/6] Installing watchdog...
 :: clean SERVICE_STOPPED, so an administrator-driven "net stop" is NOT caught.
 :: This SYSTEM-account task re-starts the service every minute if it is not running.
 schtasks /delete /tn "ScreenTimeGuardianWatchdog" /f >nul 2>&1
-schtasks /create /tn "ScreenTimeGuardianWatchdog" /tr "sc start ScreenTimeGuardian" /sc minutely /mo 1 /ru SYSTEM /f >nul 2>&1
+schtasks /create /tn "ScreenTimeGuardianWatchdog" /tr "sc start ScreenTimeGuardian" /sc daily /ri:01 /ru SYSTEM /f >nul 2>&1
 if %errorlevel% neq 0 (
     echo WARNING: Watchdog task not installed - the service can be left stopped.
 )
@@ -93,7 +93,7 @@ echo [5/6] Locking down settings and command queue...
 :: and an unresolvable name makes icacls skip the grant silently.
 :: /inheritance:r drops the inherited read/write entries for ordinary users.
 mkdir "%ProgramData%\ScreenTimeGuardian" 2>nul
-icacls "%ProgramData%\ScreenTimeGuardian" /inheritance:r /grant:r "*S-1-5-18:(OI,CI)F" "*S-1-5-32-544:(OI,CI)F" /t
+icacls "%ProgramData%\ScreenTimeGuardian" /inheritance:r /grant:r "*S-1-5-18:(OI)(CI)F" "*S-1-5-32-544:(OI)(CI)F" /t
 if %errorlevel% neq 0 goto :acl_fail
 :: Verify it took: no inherited ACE may remain on the root (locale-independent
 :: check - the (I) flag is a literal, unlike account names).
