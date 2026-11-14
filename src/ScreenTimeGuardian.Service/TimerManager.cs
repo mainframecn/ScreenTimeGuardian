@@ -16,6 +16,7 @@ public class TimerManager
     private bool _isOnBreak;
     private bool _warning5Sent;
     private bool _warning1Sent;
+    private TimeSpan _lastUsageElapsed = TimeSpan.Zero;
     private TimeSpan _remainingUsage;
     private TimeSpan _remainingBreak;
 
@@ -29,27 +30,32 @@ public class TimerManager
 
     private readonly ActivityMonitor _activityMonitor;
 
+    // Long-absence exclusion: idle beyond the threshold stops counting.
+    // Per-second idle subtraction would hand out free time for movie/gamepad
+    // sessions (XInput does not refresh LASTINPUTINFO), so it is deliberately
+    // NOT done. Toggled via Start(excludeIdleTime:) and ResetTimers().
+    private bool _excludeIdleTime = true;
+
     public TimerManager(ILogger? logger = null)
     {
         _logger = logger;
         _activityMonitor = new ActivityMonitor(idleThresholdSeconds: 300);
     }
 
-    public void Start(AppConfig config)
+    public void Start(AppConfig config, bool excludeIdleTime = true)
     {
         _config = config;
+        _excludeIdleTime = excludeIdleTime;
         _usageStartTime = DateTime.UtcNow;
         _isOnBreak = false;
         _warning5Sent = false;
         _warning1Sent = false;
 
-        _activityMonitor.OnBecameActive += () =>
-        {
-            if (!_isOnBreak)
-            {
-                _logger?.LogInformation("User active, resuming usage timer.");
-            }
-        };
+        // Event-driven activity is dead: a session-0 service receives no input
+        // events, so UpdateActivity() never fires and OnBecameIdle would freeze
+        // the clock forever. Idle detection uses GetSystemIdleTime() (LASTINPUTINFO)
+        // polled in OnUsageTick instead; the event plumbing stays for future
+        // user-session channels but drives nothing here.
 
         _usageTimer = new System.Threading.Timer(OnUsageTick, null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
 
@@ -68,18 +74,28 @@ public class TimerManager
         _activityCheckTimer?.Dispose();
     }
 
-    public void ResetTimers()
+    public void ResetTimers(bool excludeIdleTime = true)
     {
         _logger?.LogInformation("Timers reset by parent override.");
         Stop();
-        Start(_config);
+        Start(_config, excludeIdleTime);
     }
 
     private void OnUsageTick(object? state)
     {
         if (_isOnBreak) return;
 
+        // Idle exclusion: absent user -> clock frozen, no time charged.
+        // LASTINPUTINFO is system-wide, so this freezes whenever NOBODY at the
+        // desk typed or moved the mouse for the full threshold (300 s).
+        if (_excludeIdleTime && ActivityMonitor.GetSystemIdleTime().TotalSeconds >= 300)
+        {
+            _usageStartTime = DateTime.UtcNow - _lastUsageElapsed;
+            return;
+        }
+
         var elapsed = DateTime.UtcNow - _usageStartTime;
+        _lastUsageElapsed = elapsed;
         var totalTime = TimeSpan.FromMinutes(_config.UsageDurationMinutes);
         _remainingUsage = totalTime - elapsed;
 

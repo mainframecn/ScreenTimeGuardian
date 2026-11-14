@@ -57,9 +57,9 @@ ScreenTimeGuardian/
 
 ## How It Works
 
-1. **Service** starts at boot and counts elapsed usage time (idle time is not
-   subtracted yet: the activity detector is written but not wired in, so time
-   spent away from the keyboard still counts toward the limit)
+1. **Service** starts at boot and counts elapsed usage time; long absences are
+   excluded (idle beyond 5 minutes freezes the clock via LASTINPUTINFO), but
+   brief idle still counts so gamepad/movie sessions cannot mint free time
 2. After configured duration, Toast notification warns child
 3. At time limit, fullscreen lock overlay appears
 4. Child cannot use computer during break period

@@ -66,8 +66,14 @@ public class Worker : BackgroundService
                 if (command == IpcMessages.UNLOCK_SCREEN_CMD)
                 {
                     _logger.LogInformation("Parent override unlock received.");
+                    // Tear down any live countdown card: a running "locks in Ns"
+                    // after an unlock lies to the child about being locked.
+                    NotificationManager.CancelCards();
                     _processGuardian.StopProtection();
-                    _timerManager.ResetTimers();
+                    // Parent PIN unlock = "let the child play now": idle exclusion
+                    // off, so gamepad/movie sessions cannot mint free time. The
+                    // next boot or reset re-enables it.
+                    _timerManager.ResetTimers(excludeIdleTime: false);
                     _lockController.Unlock();
                 }
                 else if (command == IpcMessages.LOCK_SCREEN_CMD)
