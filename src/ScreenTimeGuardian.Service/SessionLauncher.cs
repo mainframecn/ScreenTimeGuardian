@@ -65,6 +65,11 @@ internal static class SessionLauncher
             var startupInfo = new STARTUPINFO
             {
                 cb = Marshal.SizeOf<STARTUPINFO>(),
+                // Required for an interactive child: with lpDesktop null the new
+                // process inherits the CALLER's window station - for a service
+                // that is the non-interactive Service-0x0 winsta, so its windows
+                // are never reachable on the user's desktop.
+                lpDesktop = "winsta0\\default",
                 dwFlags = (int)STARTF_USESHOWWINDOW,
                 wShowWindow = SW_HIDE // hides powershell's console; windows show themselves
             };
