@@ -48,9 +48,10 @@ if %errorlevel% neq 0 (
 )
 
 echo [2/6] Replacing installation directory...
-:: Stop the service before copying: Windows refuses to overwrite a running
-:: executable, and a half-copied install is how a machine ends up with a config
-:: app but no service or lock screen.
+:: Stop the watchdog BEFORE the service: it re-starts the service every minute,
+:: and a publish that collides with a mid-copy restart leaves files locked (MSB3021)
+:: or the install half-replaced. Watchdog is re-created at step [4/6].
+schtasks /delete /tn "ScreenTimeGuardianWatchdog" /f >nul 2>&1
 if exist "%ProgramFiles%\ScreenTimeGuardian" (
     net stop ScreenTimeGuardian >nul 2>&1
     rmdir /s /q "%ProgramFiles%\ScreenTimeGuardian"
