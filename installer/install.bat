@@ -5,9 +5,6 @@ echo  Run as Administrator!
 echo ============================================
 echo.
 
-:: Navigate to project root (parent of installer folder)
-cd /d "%~dp0.."
-
 :: Check for admin rights
 net session >nul 2>&1
 if %errorlevel% neq 0 (
@@ -18,32 +15,39 @@ if %errorlevel% neq 0 (
 )
 
 echo [1/6] Getting program files...
-:: Release layout ships a files\ folder with self-contained publishes (no
-:: .NET SDK on the target machine); source layout builds first. The copy
-:: step consumes %SRC1%..3 either way.
+:: Layout detection anchored at install.bat's OWN folder (%~dp0):
+::   - release package: files\ sits NEXT TO install.bat (package root)
+::   - source checkout: install.bat lives IN installer\, src\ is one level up
+:: The old unconditional "cd %~dp0.." assumed the source shape only, so every
+:: release run climbed ABOVE the extracted package - no files\, no src\ - and
+:: died with MSB1009 no matter how the zip was extracted.
 set "SRC1=publish\service"
 set "SRC2=publish\lockscreen"
 set "SRC3=publish\config"
+cd /d "%~dp0"
 if exist "files\ScreenTimeGuardian.Service.exe" (
-    echo      Prebuilt package detected - skipping build, no SDK needed.
+    echo      Release package found next to install.bat - no build needed.
     set "SRC1=files"
     set "SRC2=files"
     set "SRC3=files"
     goto :built
 )
+if exist "src\ScreenTimeGuardian.Service\ScreenTimeGuardian.Service.csproj" goto :build_here
+cd /d "%~dp0.."
+if exist "src\ScreenTimeGuardian.Service\ScreenTimeGuardian.Service.csproj" goto :build_here
 
-:: Neither release layout (files\) nor source layout (src\) is present:
-:: fail with a readable message instead of MSBuild's MSB1009.
-if not exist "src\ScreenTimeGuardian.Service\ScreenTimeGuardian.Service.csproj" (
-    echo.
-    echo ERROR: This folder contains neither files\ nor src\.
-    echo Run install.bat from the COMPLETE extracted release folder -
-    echo install.bat, files\ and INSTALL.txt must sit next to each other.
-    echo.
-    pause
-    exit /b 1
-)
+echo.
+echo ERROR: could not find the program files.
+echo   Looked for files\ next to install.bat, and for src\ there and one level up.
+echo   install.bat folder: %~dp0
+echo   Current folder:     %CD%
+echo   Contents of install.bat folder:
+dir /b "%~dp0"
+echo.
+pause
+exit /b 1
 
+:build_here
 where dotnet >nul 2>&1
 if %errorlevel% neq 0 (
     echo ERROR: .NET SDK not found!
