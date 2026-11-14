@@ -134,13 +134,19 @@ public static class NotificationManager
             Directory.CreateDirectory(Path.GetDirectoryName(scriptPath)!);
             File.WriteAllText(scriptPath, script);
 
-            var process = Process.Start(new ProcessStartInfo
+            // Same session-0 rule as the overlay: a service child never draws on
+            // the desktop, so relocate to the console session.
+            var process = SessionLauncher.Launch("powershell.exe", $"-NoLogo -ExecutionPolicy Bypass -File \"{scriptPath}\"");
+            if (process == null)
             {
-                FileName = "powershell.exe",
-                Arguments = $"-NoLogo -ExecutionPolicy Bypass -File \"{scriptPath}\"",
-                UseShellExecute = false,
-                CreateNoWindow = true
-            });
+                process = Process.Start(new ProcessStartInfo
+                {
+                    FileName = "powershell.exe",
+                    Arguments = $"-NoLogo -ExecutionPolicy Bypass -File \"{scriptPath}\"",
+                    UseShellExecute = false,
+                    CreateNoWindow = true
+                });
+            }
 
             if (process == null)
             {
