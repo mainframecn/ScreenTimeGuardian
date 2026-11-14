@@ -23,9 +23,16 @@ public static class GuardLog
         Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
         "ScreenTimeGuardian", "logs");
 
-    // Called once per process, before anything else logs.
+    // Called once per process, before anything else logs. Idempotent: the
+    // logging provider constructs after Main already initialised it, and a
+    // second "process starting" line misleads post-mortem reading.
     public static void Init(string tag)
     {
+        if (!string.IsNullOrEmpty(_path))
+        {
+            return;
+        }
+
         try
         {
             var dir = LogDirectory();

@@ -38,6 +38,10 @@ public class Worker : BackgroundService
         _timerManager.OnUsageTimeReached += () =>
         {
             _logger.LogWarning("Usage time reached! Triggering lock screen.");
+            // Kill any live countdown cards first: "locks in Ns" is false once
+            // the overlay is up, and the break-start card below must not be
+            // cancelled by its own cancel sentinel (timestamped comparison).
+            NotificationManager.CancelCards();
             _processGuardian.StartProtection();
             NotificationManager.ShowBreakStart(config.BreakDurationMinutes, _logger);
             _lockController.Lock(config);
@@ -46,6 +50,8 @@ public class Worker : BackgroundService
         _timerManager.OnBreakTimeReached += () =>
         {
             _logger.LogInformation("Break time over. Unlocking screen.");
+            // Break-start card says "locked for N min" — false once unlocked.
+            NotificationManager.CancelCards();
             _processGuardian.StopProtection();
             _lockController.Unlock();
         };
