@@ -18,7 +18,7 @@ env:
 
 jobs:
   build:
-    name: Build & test
+    name: Build & publish
     runs-on: windows-latest
 
     steps:
@@ -36,13 +36,32 @@ jobs:
       - name: Build
         run: dotnet build ScreenTimeGuardian.sln -c Debug
 
+      # install.bat ships all three programs side by side in one folder, and
+      # AppConfig.GetLockScreenPath() finds the overlay by looking next to the
+      # running service. Publishing them the same way here means CI exercises
+      # exactly what gets installed rather than one project in isolation.
       - name: Publish (release)
-        run: dotnet publish src/ScreenTimeGuardian.Service/ScreenTimeGuardian.Service.csproj -c Release -o ${{ github.workspace }}/publish-ci
+        shell: cmd
+        run: >-
+          dotnet publish src\ScreenTimeGuardian.Service\ScreenTimeGuardian.Service.csproj -c Release -o publish-ci &&
+          dotnet publish src\ScreenTimeGuardian.LockScreen\ScreenTimeGuardian.LockScreen.csproj -c Release -o publish-ci &&
+          dotnet publish src\ScreenTimeGuardian.Config\ScreenTimeGuardian.Config.csproj -c Release -o publish-ci
+
+      # Guards the same-folder invariant above: a silent publish failure or a
+      # renamed output would otherwise only surface on the child's machine.
+      - name: Verify installable layout
+        shell: cmd
+        run: >-
+          if exist "publish-ci\ScreenTimeGuardian.Service.exe" (exit /b 0) else (exit /b 1)
+
+      - name: Verify lock screen next to service
+        shell: cmd
+        run: >-
+          if exist "publish-ci\ScreenTimeGuardian.LockScreen.exe" (exit /b 0) else (exit /b 1)
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v5
         with:
           name: ScreenTimeGuardian-build
-          path: |
-            ${{ github.workspace }}/publish-ci/
+          path: publish-ci/
           if-no-files-found: error
