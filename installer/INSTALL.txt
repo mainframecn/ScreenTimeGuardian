@@ -1,0 +1,40 @@
+ScreenTime Guardian - installation
+==================================
+
+Requirements: Windows 10/11 (x64), an administrator account.
+No internet, no .NET runtime and no other software needed.
+
+Install
+-------
+1. Unzip this folder anywhere (keep the three items together:
+   install.bat, files\, INSTALL.txt).
+2. Right-click install.bat -> Run as administrator.
+3. Choose the 6-digit parent PIN when asked. Write it down -
+   it is what unlocks the screen during a break.
+4. Wait for "Installation complete!" and press a key.
+
+Set your limits
+---------------
+Start "ScreenTime Guardian" (Config) from
+C:\Program Files\ScreenTimeGuardian\ScreenTimeGuardian.Config.exe
+It asks for administrator approval once when saving.
+
+  Daily usage limit   1-480 minutes (installed default: 30)
+  Break length        1-120 minutes (installed default: 15)
+  Warnings            5 and 1 minute before lock (fixed)
+
+The service starts automatically with Windows and is supervised by a
+watchdog task, so it comes back after crashes or reboots.
+
+Uninstall
+---------
+Open a command prompt as administrator:
+
+  sc stop ScreenTimeGuardian
+  sc delete ScreenTimeGuardian
+  schtasks /delete /tn ScreenTimeGuardianWatchdog /f
+  rmdir /s /q "%ProgramFiles%\ScreenTimeGuardian"
+  rmdir /s /q "%ProgramData%\ScreenTimeGuardian"
+
+The last line also removes the settings file (including the parent PIN);
+skip it if you plan to reinstall.
