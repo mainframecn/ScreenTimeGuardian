@@ -89,15 +89,31 @@ if %errorlevel% neq 0 (
 echo [5/6] Locking down settings and command queue...
 :: The service (LocalSystem) writes config.json and the ipc queue; the child's
 :: session must not be able to, or they can self-unlock or reset their own PIN.
+:: SIDs, not names: SYSTEM/Administrators are localized on non-English Windows
+:: and an unresolvable name makes icacls skip the grant silently.
 :: /inheritance:r drops the inherited read/write entries for ordinary users.
 mkdir "%ProgramData%\ScreenTimeGuardian" 2>nul
-icacls "%ProgramData%\ScreenTimeGuardian" /inheritance:r /grant:r "SYSTEM:(OI,CI,F)" "Administrators:(OI,CI,F)" /t >nul
-if %errorlevel% neq 0 (
-    echo WARNING: could not lock down the settings folder.
-    echo On a non-English Windows locale the account names SYSTEM and Administrators
-    echo may need to be given as security identifiers instead. Until that is fixed,
-    echo a child could edit the config or queue their own unlock command.
-)
+icacls "%ProgramData%\ScreenTimeGuardian" /inheritance:r /grant:r "*S-1-5-18:(OI,CI)F" "*S-1-5-32-544:(OI,CI)F" /t
+if %errorlevel% neq 0 goto :acl_fail
+:: Verify it took: no inherited ACE may remain on the root (locale-independent
+:: check - the (I) flag is a literal, unlike account names).
+for /f "delims=" %%A in ('icacls "%ProgramData%\ScreenTimeGuardian" ^| find /c "(I)"') do set "acl_inherited=%%A"
+if not "%acl_inherited%"=="0" goto :acl_fail
+echo      Settings folder locked to SYSTEM + Administrators only.
+goto :acl_ok
+
+:acl_fail
+echo.
+echo ERROR: could not lock down %ProgramData%\ScreenTimeGuardian.
+echo Without the lockdown a child can read the parent PIN and queue their
+echo own STG_UNLOCK command - the app would enforce nothing.
+echo Fix: as Administrator run icacls on that folder granting only SIDs
+echo *S-1-5-18 (SYSTEM) and *S-1-5-32-544 (Administrators), then re-run
+echo this installer.
+pause
+exit /b 1
+
+:acl_ok
 
 echo [6/6] Starting service...
 net start ScreenTimeGuardian
