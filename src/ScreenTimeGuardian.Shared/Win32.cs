@@ -44,6 +44,33 @@ public static class Win32
     [DllImport("kernel32.dll")]
     public static extern uint GetTickCount();
 
+    // PPID lookup for NtQuery (used to detect an SCM-launched parent, i.e. services.exe).
+    [StructLayout(LayoutKind.Sequential)]
+    public struct PROCESS_INFO_PARENT
+    {
+        public IntPtr Unused0;
+        public int ParentProcessId;
+    }
+
+    [DllImport("wmi.dll", EntryPoint = "GetProcessInfo")]
+    public static extern int GetProcessInfo(int pid, IntPtr processInfo);
+
+    public static int GetParentProcessId(int pid)
+    {
+        var info = new PROCESS_INFO_PARENT();
+        var gch = GCHandle.Alloc(info, GCHandleType.Normal);
+        try
+        {
+            if (GetProcessInfo(pid, GCHandle.ToIntPtr(gch)) == 0)
+                return info.ParentProcessId;
+        }
+        finally
+        {
+            gch.Free();
+        }
+        return 0;
+    }
+
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     public static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
