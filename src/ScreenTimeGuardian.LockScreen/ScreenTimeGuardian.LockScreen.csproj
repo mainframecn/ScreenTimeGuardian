@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <!-- Screen.AllScreens is the WinForms API for enumerating displays; WPF alone
+         only exposes the primary screen dimensions. -->
+    <UseWindowsForms>true</UseWindowsForms>
+    <RootNamespace>ScreenTimeGuardian.LockScreen</RootNamespace>
+    <ApplicationIcon></ApplicationIcon>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ScreenTimeGuardian.Shared\ScreenTimeGuardian.Shared.csproj" />
+  </ItemGroup>
+
+</Project>

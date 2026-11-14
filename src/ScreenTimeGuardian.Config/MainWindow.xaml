@@ -1,0 +1,122 @@
+<Window x:Class="ScreenTimeGuardian.Config.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="ScreenTime Guardian - Settings"
+        Width="500" Height="450"
+        WindowStartupLocation="CenterScreen"
+        ResizeMode="NoResize"
+        Background="#FF1A1A2E">
+
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <TextBlock Grid.Row="0"
+                   Text="ScreenTime Guardian Settings"
+                   FontSize="24"
+                   FontWeight="Bold"
+                   Foreground="#FF00D2FF"
+                   HorizontalAlignment="Center"
+                   Margin="0,0,0,20"/>
+
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+            <StackPanel>
+
+                <Border Background="#22FFFFFF" CornerRadius="10" Padding="15" Margin="0,0,0,15">
+                    <StackPanel>
+                        <TextBlock Text="Usage Duration (minutes)" Foreground="White" FontWeight="SemiBold"/>
+                        <TextBox x:Name="UsageDurationBox"
+                                 FontSize="16"
+                                 Padding="8"
+                                 Margin="0,5,0,0"
+                                 MaxLength="3"/>
+                    </StackPanel>
+                </Border>
+
+                <Border Background="#22FFFFFF" CornerRadius="10" Padding="15" Margin="0,0,0,15">
+                    <StackPanel>
+                        <TextBlock Text="Break Duration (minutes)" Foreground="White" FontWeight="SemiBold"/>
+                        <TextBox x:Name="BreakDurationBox"
+                                 FontSize="16"
+                                 Padding="8"
+                                 Margin="0,5,0,0"
+                                 MaxLength="3"/>
+                    </StackPanel>
+                </Border>
+
+                <Border Background="#22FFFFFF" CornerRadius="10" Padding="15" Margin="0,0,0,15">
+                    <StackPanel>
+                        <TextBlock Text="Parent PIN (6 digits)" Foreground="White" FontWeight="SemiBold"/>
+                        <PasswordBox x:Name="PinBox"
+                                     FontSize="16"
+                                     MaxLength="6"
+                                     Padding="8"
+                                     Margin="0,5,0,0"/>
+                    </StackPanel>
+                </Border>
+
+                <Border Background="#22FFFFFF" CornerRadius="10" Padding="15" Margin="0,0,0,15">
+                    <StackPanel>
+                        <CheckBox x:Name="NotificationsCheckBox"
+                                  Content="Enable pre-break notifications"
+                                  Foreground="White"
+                                  FontSize="14"/>
+                        <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                            <TextBlock Text="Warning at:" Foreground="#AAFFFFFF" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                            <ComboBox x:Name="WarningMinutesCombo"
+                                      Width="80"
+                                      Padding="5">
+                                <ComboBoxItem Content="1" IsSelected="False"/>
+                                <ComboBoxItem Content="2"/>
+                                <ComboBoxItem Content="3"/>
+                                <ComboBoxItem Content="5" IsSelected="True"/>
+                                <ComboBoxItem Content="10"/>
+                            </ComboBox>
+                            <TextBlock Text=" minutes" Foreground="#AAFFFFFF" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <TextBlock x:Name="StatusText"
+                           Text=""
+                           Foreground="#FF00FF88"
+                           HorizontalAlignment="Center"
+                           Margin="0,5,0,0"
+                           FontSize="14"/>
+            </StackPanel>
+        </ScrollViewer>
+
+        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,15,0,0">
+            <Button x:Name="SaveButton"
+                    Content="Save Settings"
+                    FontSize="16"
+                    Padding="25,10"
+                    Background="#FF00D2FF"
+                    Foreground="#FF1A1A2E"
+                    FontWeight="Bold"
+                    Margin="0,0,15,0"
+                    Click="SaveButton_Click"/>
+
+            <Button x:Name="ResetButton"
+                    Content="Reset to Defaults"
+                    FontSize="16"
+                    Padding="25,10"
+                    Background="#44FFFFFF"
+                    Foreground="White"
+                    Click="ResetButton_Click"/>
+
+            <Button x:Name="LockNowButton"
+                    Content="Lock Now"
+                    FontSize="16"
+                    Padding="25,10"
+                    Background="#FFFF4444"
+                    Foreground="White"
+                    FontWeight="Bold"
+                    Margin="15,0,0,0"
+                    Click="LockNowButton_Click"/>
+        </StackPanel>
+    </Grid>
+</Window>
