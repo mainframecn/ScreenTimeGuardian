@@ -55,10 +55,12 @@ public static class NotificationManager
         _ = Task.Run(() => ShowBalloon(title, message, seconds));
     }
 
-    // Parent PIN unlock must tear down any live card too: a countdown still
-    // running after an unlock tells the child they are locked when they are
-    // not. The PS loop compares its start time against this sentinel file's
-    // timestamp every tick and exits if a cancel landed after it started —
+    // Pre-lock countdown card. The PowerShell/WinForms variant never became
+    // visible on the desktop from the service (see git history), while the
+    // LockScreen WPF exe launched through SessionLauncher renders reliably -
+    // so the card is now a --card mode of that same executable, sharing its
+    // proven session/desktop path. The card compares its start time against
+    // this sentinel every tick and exits if a cancel landed after it started,
     // so a later card is never killed by an older cancel.
     private static readonly string CardCancelFile = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
@@ -77,89 +79,38 @@ public static class NotificationManager
         }
     }
 
-    // ISO-8601 round-trip strings compare correctly as PS [datetime] values.
     private static void ShowBalloon(string title, string message, int seconds)
     {
-        var scriptPath = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
-            "ScreenTimeGuardian", "toast.ps1");
-
-        // Persistent countdown card: top-right window with a live "locks in Ns"
-        // counter, click-to-dismiss, auto-close at 0. Balloon tips cap at 30 s
-        // which is too short to act on; a real window has no such limit.
-        // TopMost alone loses z-order over fullscreen apps (games), so the loop
-        // re-asserts it every half-second tick.
-        var script = string.Join(Environment.NewLine, [
-            "$ErrorActionPreference = 'Stop'; try {",
-            "Add-Type -AssemblyName System.Windows.Forms,System.Drawing",
-            "$f = New-Object System.Windows.Forms.Form",
-            "$f.Text = 'ScreenTime Guardian'",
-            "$f.StartPosition = 'Manual'",
-            "$f.TopMost = $true",
-            "$f.BackColor = [System.Drawing.Color]::FromArgb(30,30,30)",
-            "$lbl = New-Object System.Windows.Forms.Label",
-            "$lbl.AutoSize = $true; $lbl.ForeColor = [System.Drawing.Color]::White",
-            "$lbl.Font = [System.Drawing.Font]::New('Segoe UI', 14)",
-            "$sub = New-Object System.Windows.Forms.Label",
-            "$sub.AutoSize = $true; $sub.ForeColor = [System.Drawing.Color]::FromArgb(200,200,200)",
-            "$lbl.Location = [System.Drawing.Point]::New(12, 8); $sub.Location = [System.Drawing.Point]::New(12, 34)",
-            "$f.Controls.AddRange([System.Windows.Forms.Control[]]($lbl,$sub))",
-            $"$title = '{QuoteForPowerShell(title)}'; $msg = '{QuoteForPowerShell(message)}'",
-            "$lbl.Text = $title; $sub.Text = $msg",
-            "$w = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds",
-            "$f.ClientSize = [System.Drawing.Size]::New(420, 78)",
-            "$f.Location = [System.Drawing.Point]::New($w.Width - 440, 20)",
-            "$left = " + seconds,
-            "$cancelFile = 'C:\\\\ProgramData\\\\ScreenTimeGuardian\\\\ipc\\\\STG_CARD_CANCEL'",
-            "$startedAt = Get-Date",
-            "$closeBtn = New-Object System.Windows.Forms.Button",
-            "$closeBtn.Text = 'x'; $closeBtn.ForeColor = [System.Drawing.Color]::White",
-            "$closeBtn.BackColor = [System.Drawing.Color]::FromArgb(30,30,30)",
-            "$closeBtn.Location = [System.Drawing.Point]::New(384, 8); $closeBtn.Size = [System.Drawing.Size]::New(26,26)",
-            "$closeBtn.Font = [System.Drawing.Font]::New('Segoe UI', 12)",
-            "$f.Controls.Add($closeBtn)",
-            "$f.Show()",
-            "while ($left -gt 0) {",
-            "  if (Test-Path $cancelFile) { $ct = [datetime](Get-Content $cancelFile); if ($ct -ge $startedAt) { break } }",
-            "  $f.TopMost = $true",
-            "  $lbl.Text = $title",
-            "  $sub.Text = ('{0}  |  locks in {1}s' -f $msg, $left)",
-            "  [System.Windows.Forms.Application]::DoEvents()",
-            "  Start-Sleep -Milliseconds 1000",
-            "  $left--",
-            "}",
-            "if (-not $f.IsDisposed) { $f.Close() }",
-            "} catch { Add-Content -LiteralPath 'C:\\ProgramData\\ScreenTimeGuardian\\logs\\card_error.log' -Value ((Get-Date).ToString('s') + ' | ' + $_); exit 1 }"
-        ]);
-
         try
         {
-            Directory.CreateDirectory(Path.GetDirectoryName(scriptPath)!);
-            File.WriteAllText(scriptPath, script);
-
-            // Same session-0 rule as the overlay: a service child never draws on
-            // the desktop, so relocate to the console session.
-            var process = SessionLauncher.Launch("powershell.exe", $"-NoLogo -ExecutionPolicy Bypass -File \"{scriptPath}\"");
-            if (process == null)
+            var cardHost = AppConfig.GetLockScreenPath();
+            if (!File.Exists(cardHost))
             {
-                process = Process.Start(new ProcessStartInfo
+                GuardLog.Warn($"card host missing at {cardHost}");
+                return;
+            }
+
+            var arguments = $"--card --seconds {seconds} --title \"{title}\" --message \"{message}\"";
+
+            // Same session/desktop rules as the overlay itself.
+            var process = SessionLauncher.Launch(cardHost, arguments)
+                ?? Process.Start(new ProcessStartInfo
                 {
-                    FileName = "powershell.exe",
-                    Arguments = $"-NoLogo -ExecutionPolicy Bypass -File \"{scriptPath}\"",
+                    FileName = cardHost,
+                    Arguments = arguments,
                     UseShellExecute = false,
                     CreateNoWindow = true
                 });
-            }
 
             if (process == null)
             {
-                GuardLog.Warn("Notification process could not be started.");
+                GuardLog.Warn("Notification card could not be started.");
                 return;
             }
 
             var exited = process.WaitForExit((seconds + 15) * 1000);
-            // ExitCode throws for a Process obtained via GetProcessById (SessionLauncher
-            // path) - guard it or the real card outcome never reaches the log.
+            // ExitCode throws for a Process obtained via GetProcessById
+            // (SessionLauncher path) - guard it or the outcome never logs.
             int code;
             try { code = process.ExitCode; } catch { code = -1; }
             GuardLog.Info($"notification card shown for {seconds}s exited={exited} code={code}");
@@ -169,9 +120,4 @@ public static class NotificationManager
             GuardLog.Error("Notification failed", ex);
         }
     }
-
-    // Settings come from an editable file, so the text must not be able to close
-    // the PowerShell string and run something of its own.
-    private static string QuoteForPowerShell(string value)
-        => value.Replace("'", "''");
 }

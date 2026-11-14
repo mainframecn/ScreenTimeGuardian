@@ -29,6 +29,26 @@ public partial class App : System.Windows.Application
             }
         }
 
+        // Card mode: the service's pre-lock notification. No overlay, no input
+        // blocking, no PIN handoff - one self-contained countdown window that
+        // exits at zero or when the cancel sentinel lands.
+        if (Array.IndexOf(args, "--card") >= 0)
+        {
+            var seconds = 60;
+            var title = "ScreenTime Guardian";
+            var message = string.Empty;
+            for (int i = 1; i + 1 < args.Length; i++)
+            {
+                if (args[i] == "--seconds" && int.TryParse(args[i + 1], out var s)) seconds = s;
+                else if (args[i] == "--title") title = args[i + 1];
+                else if (args[i] == "--message") message = args[i + 1];
+            }
+
+            GuardLog.Info($"card mode seconds={seconds}");
+            new CardWindow(seconds, title, message).Show();
+            return;
+        }
+
         // PIN handoff via IPC, never the command line: drop a request marker,
         // wait for the service's one-shot grant file. No PIN in process listings
         // or screenshots. Null PIN = unlock button disabled until it arrives.
