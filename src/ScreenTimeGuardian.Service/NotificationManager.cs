@@ -10,18 +10,20 @@ public static class NotificationManager
 {
     // Balloon tips die at 30 s (Windows clamps them), which users reported as
     // too short to act on. These are display durations for a persistent
-    // countdown card instead; no clamp applies.
-    private const int WarningSeconds = 120;
+    // countdown card instead; no clamp applies. Warning cards now count down
+    // the real seconds-to-lock passed in by TimerManager, not a fixed span.
     private const int BreakStartSeconds = 60;
 
-    public static void ShowWarning(int minutes, ILogger? logger = null)
+    public static void ShowWarning(int minutes, int secondsLeft, ILogger? logger = null)
     {
         try
         {
             var title = minutes == 1 ? "Break in 1 minute!" : $"Break in {minutes} minutes";
             var message = "Save your work. The computer will lock soon for a break.";
 
-            SendWindowsNotification(title, message, WarningSeconds);
+            // Countdown reflects the actual time to lock, so the card's timer
+            // and its headline agree (was hard-coded at 120 s).
+            SendWindowsNotification(title, message, Math.Max(5, secondsLeft));
             logger?.LogInformation("Notification sent: {Title}", title);
         }
         catch (Exception ex)
