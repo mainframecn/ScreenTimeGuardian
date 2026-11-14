@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text;
+using ScreenTimeGuardian.Shared;
 
 namespace ScreenTimeGuardian.Service;
 
@@ -16,7 +17,7 @@ namespace ScreenTimeGuardian.Service;
 internal static class SessionLauncher
 {
     private const uint TOKEN_ALL_ACCESS = 0xF01FF;
-    private const int TOKEN_SESSION_ID = 23;
+    private const int TOKEN_SESSION_ID = 12; // TOKEN_INFORMATION_CLASS.TokenSessionId (23 would be TokenVirtualizationAllowed)
     private const uint SE_PRIVILEGE_ENABLED = 0x2;
     private const int SECURITY_IMPERSONATION = 2; // SecurityImpersonation
     private const int TOKEN_PRIMARY = 1;
@@ -30,10 +31,17 @@ internal static class SessionLauncher
         try
         {
             var sessionId = WTSGetActiveConsoleSessionId();
-            if (sessionId == 0xFFFFFFFF) return null; // no console session
+            if (sessionId == 0xFFFFFFFF)
+            {
+                GuardLog.Warn("session launch: no active console session");
+                return null;
+            }
 
             if (!OpenProcessToken(GetCurrentProcess(), TOKEN_ALL_ACCESS, out processToken))
+            {
+                GuardLog.Warn($"session launch: OpenProcessToken failed err={Marshal.GetLastWin32Error()}");
                 return null;
+            }
 
             // SYSTEM holds these but they may be disabled on the token copy.
             EnablePrivilege(processToken, "SeTcbPrivilege");
@@ -42,11 +50,17 @@ internal static class SessionLauncher
 
             if (!DuplicateTokenEx(processToken, TOKEN_ALL_ACCESS, IntPtr.Zero,
                     SECURITY_IMPERSONATION, TOKEN_PRIMARY, out primary))
+            {
+                GuardLog.Warn($"session launch: DuplicateTokenEx failed err={Marshal.GetLastWin32Error()}");
                 return null;
+            }
 
             // Relocate the duplicated token into the interactive session.
             if (!SetTokenInformation(primary, TOKEN_SESSION_ID, ref sessionId, sizeof(uint)))
+            {
+                GuardLog.Warn($"session launch: SetTokenInformation(session={sessionId}) failed err={Marshal.GetLastWin32Error()}");
                 return null;
+            }
 
             var startupInfo = new STARTUPINFO
             {
@@ -57,15 +71,20 @@ internal static class SessionLauncher
             var commandLine = new StringBuilder($"\"{exePath}\" {arguments}");
             if (!CreateProcessAsUser(primary, null, commandLine, IntPtr.Zero, IntPtr.Zero,
                     false, 0, IntPtr.Zero, null, ref startupInfo, out var info))
+            {
+                GuardLog.Warn($"session launch: CreateProcessAsUser failed err={Marshal.GetLastWin32Error()}");
                 return null;
+            }
 
             CloseHandle(info.hThread);
             var process = Process.GetProcessById((int)info.dwProcessId);
             CloseHandle(info.hProcess);
+            GuardLog.Info($"session launch: pid={info.dwProcessId} session={sessionId}");
             return process;
         }
-        catch
+        catch (Exception ex)
         {
+            GuardLog.Warn($"session launch: exception {ex.Message}");
             return null;
         }
         finally
