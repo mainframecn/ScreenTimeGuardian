@@ -19,7 +19,6 @@ public partial class App : System.Windows.Application
         GuardLog.Init("lockscreen");
 
         int durationMinutes = 15;
-        string parentPin = "123456";
 
         var args = Environment.GetCommandLineArgs();
         for (int i = 1; i < args.Length - 1; i++)
@@ -28,13 +27,15 @@ public partial class App : System.Windows.Application
             {
                 durationMinutes = parsed;
             }
-            else if (args[i] == "--pin")
-            {
-                parentPin = args[i + 1];
-            }
         }
 
-        // The PIN arrives on the command line, so it is never written to the log.
+        // PIN handoff via IPC, never the command line: drop a request marker,
+        // wait for the service's one-shot grant file. No PIN in process listings
+        // or screenshots. Null PIN = unlock button disabled until it arrives.
+        IpcMessages.SendPinRequest();
+        var parentPin = IpcMessages.WaitForPinGrant(5000) ?? string.Empty;
+
+        // The PIN value is never logged, only its length.
         GuardLog.Info($"startup duration={durationMinutes} pin length={parentPin.Length}");
 
         var screens = WinForms.Screen.AllScreens;

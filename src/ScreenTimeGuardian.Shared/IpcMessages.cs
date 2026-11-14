@@ -10,6 +10,13 @@ public static class IpcMessages
     public const string STATUS_REQUEST = "STG_STATUS";
     public const string STATUS_RESPONSE = "STG_STATUS_OK";
 
+    // PIN handoff: the overlay must never receive the parent PIN on its
+    // command line (visible in process listings). It drops a request marker;
+    // the service — sole owner of config.json — replies with a one-shot
+    // grant file the overlay polls, reads and deletes.
+    public const string PIN_REQUEST = "STG_PINREQ";
+    public const string PIN_GRANT = "STG_PINGrant";
+
     private static readonly string IpcDir = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
         "ScreenTimeGuardian", "ipc");
@@ -25,7 +32,7 @@ public static class IpcMessages
     }
 
     // The commands the service knows how to act on. STATUS_* are not dispatched.
-    private static readonly string[] DispatchedCommands = [LOCK_SCREEN_CMD, UNLOCK_SCREEN_CMD];
+    private static readonly string[] DispatchedCommands = [LOCK_SCREEN_CMD, UNLOCK_SCREEN_CMD, PIN_REQUEST];
 
     public static void SendCommand(string command)
     {
@@ -34,6 +41,40 @@ public static class IpcMessages
         // the names sortable oldest-first.
         var cmdPath = Path.Combine(IpcDir, $"{command}_{DateTime.UtcNow:yyyyMMddHHmmssfffffff}.txt");
         File.WriteAllText(cmdPath, $"{command} {DateTime.UtcNow.ToString("o")}");
+    }
+
+    public static void SendPinRequest() => SendCommand(PIN_REQUEST);
+
+    // One-shot PIN fetch: poll for the grant file, read it, delete it. The
+    // service writes it in response to STG_PINREQ; bounded wait so a missing
+    // service does not hang the overlay forever (it falls back to no PIN).
+    public static string? WaitForPinGrant(int timeoutMs = 5000)
+    {
+        var deadline = DateTime.UtcNow.AddMilliseconds(timeoutMs);
+        while (DateTime.UtcNow < deadline)
+        {
+            if (Directory.Exists(IpcDir))
+            {
+                var grant = Directory
+                    .GetFiles(IpcDir, $"{PIN_GRANT}_*.txt")
+                    .OrderBy(f => TimestampOf(Path.GetFileName(f)), StringComparer.Ordinal)
+                    .FirstOrDefault();
+                if (grant != null)
+                {
+                    try
+                    {
+                        var pin = File.ReadAllText(grant).Trim();
+                        return pin.Length > 0 ? pin : null;
+                    }
+                    finally
+                    {
+                        try { File.Delete(grant); } catch { }
+                    }
+                }
+            }
+            Thread.Sleep(100);
+        }
+        return null;
     }
 
     public static string? WaitForCommand(int timeoutMs = 1000)

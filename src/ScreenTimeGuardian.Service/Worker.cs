@@ -63,7 +63,28 @@ public class Worker : BackgroundService
             try
             {
                 var command = IpcMessages.WaitForCommand(500);
-                if (command == IpcMessages.UNLOCK_SCREEN_CMD)
+                if (command == IpcMessages.PIN_REQUEST)
+                {
+                    // Overlay asked for the PIN; reply with a one-shot grant file.
+                    // The PIN never travels on any command line, so process listings
+                    // and screenshots cannot leak it.
+                    try
+                    {
+                        Directory.CreateDirectory(Path.Combine(
+                            Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
+                            "ScreenTimeGuardian", "ipc"));
+                        var grantPath = Path.Combine(
+                            Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
+                            "ScreenTimeGuardian", "ipc",
+                            $"{IpcMessages.PIN_GRANT}_{DateTime.UtcNow:yyyyMMddHHmmssfffffff}.txt");
+                        File.WriteAllText(grantPath, config.ParentPin);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "Failed to write PIN grant.");
+                    }
+                }
+                else if (command == IpcMessages.UNLOCK_SCREEN_CMD)
                 {
                     _logger.LogInformation("Parent override unlock received.");
                     // Tear down any live countdown card: a running "locks in Ns"
