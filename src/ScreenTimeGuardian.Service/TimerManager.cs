@@ -113,16 +113,17 @@ public class TimerManager
             if (!_warning5Sent && remainingMinutes <= _config.NotificationWarningMinutes && remainingMinutes > _config.NotificationUrgentMinutes)
             {
                 _warning5Sent = true;
-                // The card's live countdown must match the real lock time, not a
-                // fixed display duration: pass the actual seconds left so "Break in
-                // 5 minutes" cannot sit next to a "locks in 107s" counter.
-                OnNotificationWarning?.Invoke(_config.NotificationWarningMinutes, (int)Math.Ceiling(_remainingUsage.TotalSeconds));
+                // Title AND countdown show the REAL time to lock: with a 2-minute
+                // usage limit a "Break in 5 minutes" headline next to a "locks in
+                // 119s" counter is nonsense. Config thresholds only decide WHEN a
+                // card fires, never what it claims.
+                OnNotificationWarning?.Invoke(remainingMinutes, (int)Math.Ceiling(_remainingUsage.TotalSeconds));
             }
 
             if (!_warning1Sent && remainingMinutes <= _config.NotificationUrgentMinutes)
             {
                 _warning1Sent = true;
-                OnNotificationWarning?.Invoke(_config.NotificationUrgentMinutes, (int)Math.Ceiling(_remainingUsage.TotalSeconds));
+                OnNotificationWarning?.Invoke(remainingMinutes, (int)Math.Ceiling(_remainingUsage.TotalSeconds));
             }
         }
     }
