@@ -62,7 +62,13 @@ public class Worker : BackgroundService
             NotificationManager.ShowWarning(minutes, secondsLeft, _logger);
         };
 
-        _timerManager.Start(config);
+        // Idle exclusion relies on LASTINPUTINFO, which is per-session: a session-0
+        // Windows service never sees the interactive user's keystrokes, so idle reads
+        // as huge and the clock freezes forever (installed app silently never locked).
+        // Exclusion therefore runs only when we can observe real input — i.e. NOT as
+        // a service. Dev-run/console mode keeps it; service mode charges time always.
+        var underService = IsUnderServiceManager();
+        _timerManager.Start(config, excludeIdleTime: !underService);
 
         while (!stoppingToken.IsCancellationRequested)
         {
@@ -121,5 +127,36 @@ public class Worker : BackgroundService
         _timerManager.Stop();
         _processGuardian.StopProtection();
         _logger.LogInformation("ScreenTimeGuardian service stopped.");
+    }
+
+    // LASTINPUTINFO is per-session, so idle-based exclusion only makes sense when
+    // the process shares the user's session. Under SCM (services.exe parent) it
+    // never sees user input; treat that as "no exclusion".
+    private bool IsUnderServiceManager()
+    {
+        try
+        {
+            var self = System.Diagnostics.Process.GetCurrentProcess();
+            var parent = GetParentProcess(self.Id);
+            return parent != null && parent.ProcessName.Equals("services", StringComparison.OrdinalIgnoreCase);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static System.Diagnostics.Process? GetParentProcess(int pid)
+    {
+        try
+        {
+            var ppid = Win32.GetParentProcessId(pid);
+            if (ppid <= 0) return null;
+            return System.Diagnostics.Process.GetProcessById(ppid);
+        }
+        catch
+        {
+            return null;
+        }
     }
 }
