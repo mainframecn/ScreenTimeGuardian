@@ -56,10 +56,10 @@ public class Worker : BackgroundService
             _lockController.Unlock();
         };
 
-        _timerManager.OnNotificationWarning += (minutes) =>
+        _timerManager.OnNotificationWarning += (minutes, secondsLeft) =>
         {
-            _logger.LogInformation("Break in {Minutes} minutes warning sent.", minutes);
-            NotificationManager.ShowWarning(minutes, _logger);
+            _logger.LogInformation("Break in {Minutes} minutes warning sent ({Seconds}s left).", minutes, secondsLeft);
+            NotificationManager.ShowWarning(minutes, secondsLeft, _logger);
         };
 
         _timerManager.Start(config);

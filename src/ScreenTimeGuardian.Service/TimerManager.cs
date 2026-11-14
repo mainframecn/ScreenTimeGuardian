@@ -22,7 +22,7 @@ public class TimerManager
 
     public event Action? OnUsageTimeReached;
     public event Action? OnBreakTimeReached;
-    public event Action<int>? OnNotificationWarning;
+    public event Action<int, int>? OnNotificationWarning; // (minutesLabel, actualSecondsLeft)
 
     public bool IsOnBreak => _isOnBreak;
     public TimeSpan RemainingUsage => _remainingUsage;
@@ -113,13 +113,16 @@ public class TimerManager
             if (!_warning5Sent && remainingMinutes <= _config.NotificationWarningMinutes && remainingMinutes > _config.NotificationUrgentMinutes)
             {
                 _warning5Sent = true;
-                OnNotificationWarning?.Invoke(_config.NotificationWarningMinutes);
+                // The card's live countdown must match the real lock time, not a
+                // fixed display duration: pass the actual seconds left so "Break in
+                // 5 minutes" cannot sit next to a "locks in 107s" counter.
+                OnNotificationWarning?.Invoke(_config.NotificationWarningMinutes, (int)Math.Ceiling(_remainingUsage.TotalSeconds));
             }
 
             if (!_warning1Sent && remainingMinutes <= _config.NotificationUrgentMinutes)
             {
                 _warning1Sent = true;
-                OnNotificationWarning?.Invoke(_config.NotificationUrgentMinutes);
+                OnNotificationWarning?.Invoke(_config.NotificationUrgentMinutes, (int)Math.Ceiling(_remainingUsage.TotalSeconds));
             }
         }
     }
