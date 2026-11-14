@@ -39,7 +39,7 @@ public class LockController
             _lockScreenProcess = Process.Start(new ProcessStartInfo
             {
                 FileName = lockScreenPath,
-                Arguments = $"--duration {config.BreakDurationMinutes} --pin {config.ParentPin}",
+                Arguments = $"--duration {config.BreakDurationMinutes}",
                 UseShellExecute = false,
                 CreateNoWindow = true
             });

@@ -51,6 +51,13 @@ public partial class LockMainWindow : Window
             ParentUnlockButton.Visibility = Visibility.Collapsed;
             PinPanel.IsEnabled = false;
         }
+        else if (string.IsNullOrEmpty(parentPin))
+        {
+            // Handoff failed: no PIN to type, so keep the panel off until a
+            // later grant arrives rather than offering an empty-box unlock.
+            ParentUnlockButton.Visibility = Visibility.Collapsed;
+            PinPanel.IsEnabled = false;
+        }
 
         UpdateCountdownDisplay();
 
@@ -164,6 +171,13 @@ public partial class LockMainWindow : Window
 
     private void PinUnlock_Click(object? sender, RoutedEventArgs e)
     {
+        // Empty PIN = the service never granted one (handoff failed); an empty
+        // box must not match and self-unlock.
+        if (string.IsNullOrEmpty(_parentPin))
+        {
+            GuardLog.Warn("unlock pressed but no PIN was granted; ignoring");
+            return;
+        }
         if (PinInput.Password == _parentPin)
         {
             GuardLog.Info("parent unlock via Unlock button");
