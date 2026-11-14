@@ -8,11 +8,11 @@ namespace ScreenTimeGuardian.Service;
 
 public static class NotificationManager
 {
-    // Windows clamps a balloon tip lifetime between 10 and 30 seconds, so these
-    // are the readable limits rather than a timeout that looks configurable but
-    // is ignored. https://stackoverflow.com/questions/6846112
-    private const int WarningSeconds = 20;
-    private const int BreakStartSeconds = 30;
+    // Balloon tips die at 30 s (Windows clamps them), which users reported as
+    // too short to act on. These are display durations for a persistent
+    // countdown card instead; no clamp applies.
+    private const int WarningSeconds = 120;
+    private const int BreakStartSeconds = 60;
 
     public static void ShowWarning(int minutes, ILogger? logger = null)
     {
@@ -59,18 +59,46 @@ public static class NotificationManager
             Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
             "ScreenTimeGuardian", "toast.ps1");
 
-        var clamped = Math.Clamp(seconds, 10, 30);
+        // Persistent countdown card: top-right window with a live "locks in Ns"
+        // counter, click-to-dismiss, auto-close at 0. Balloon tips cap at 30 s
+        // which is too short to act on; a real window has no such limit.
+        // TopMost alone loses z-order over fullscreen apps (games), so the loop
+        // re-asserts it every half-second tick.
         var script = string.Join(Environment.NewLine, [
-            "Add-Type -AssemblyName System.Windows.Forms",
-            "$notify = New-Object System.Windows.Forms.NotifyIcon",
-            "$notify.Icon = [System.Drawing.SystemIcons]::Information",
-            "$notify.Visible = $true",
-            $"$notify.BalloonTipTitle = '{QuoteForPowerShell(title)}'",
-            $"$notify.BalloonTipText = '{QuoteForPowerShell(message)}'",
-            "$notify.BalloonTipIcon = 'Info'",
-            $"$notify.ShowBalloonTip({clamped * 1000})",
-            $"Start-Sleep -Seconds {clamped}",
-            "$notify.Dispose()"
+            "Add-Type -AssemblyName System.Windows.Forms,System.Drawing",
+            "$f = New-Object System.Windows.Forms.Form",
+            "$f.Text = 'ScreenTime Guardian'",
+            "$f.StartPosition = 'Manual'",
+            "$f.TopMost = $true",
+            "$f.BackColor = [System.Drawing.Color]::FromArgb(30,30,30)",
+            "$lbl = New-Object System.Windows.Forms.Label",
+            "$lbl.AutoSize = $true; $lbl.ForeColor = [System.Drawing.Color]::White",
+            "$lbl.Font = [System.Drawing.Font]::New('Segoe UI', 14)",
+            "$sub = New-Object System.Windows.Forms.Label",
+            "$sub.AutoSize = $true; $sub.ForeColor = [System.Drawing.Color]::FromArgb(200,200,200)",
+            "$lbl.Location = [System.Drawing.Point]::New(12, 8); $sub.Location = [System.Drawing.Point]::New(12, 34)",
+            "$f.Controls.AddRange([System.Windows.Forms.Control[]]($lbl,$sub))",
+            $"$title = '{QuoteForPowerShell(title)}'; $msg = '{QuoteForPowerShell(message)}'",
+            "$lbl.Text = $title; $sub.Text = $msg",
+            "$w = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds",
+            "$f.ClientSize = [System.Drawing.Size]::New(420, 78)",
+            "$f.Location = [System.Drawing.Point]::New($w.Width - 440, 20)",
+            "$left = " + seconds,
+            "$closeBtn = New-Object System.Windows.Forms.Button",
+            "$closeBtn.Text = 'x'; $closeBtn.ForeColor = [System.Drawing.Color]::White",
+            "$closeBtn.BackColor = [System.Drawing.Color]::FromArgb(30,30,30)",
+            "$closeBtn.Location = [System.Drawing.Point]::New(384, 8); $closeBtn.Size = [System.Drawing.Size]::New(26,26)",
+            "$closeBtn.Font = [System.Drawing.Font]::New('Segoe UI', 12)",
+            "$f.Controls.Add($closeBtn)",
+            "$f.Show()",
+            "while ($left -gt 0) {",
+            "  $f.TopMost = $true",
+            "  $lbl.Text = $title",
+            "  $sub.Text = ('{0}  |  locks in {1}s' -f $msg, $left)",
+            "  Start-Sleep -Milliseconds 500",
+            "  $left--",
+            "}",
+            "if (-not $f.IsDisposed) { $f.Close() }"
         ]);
 
         try
@@ -92,8 +120,8 @@ public static class NotificationManager
                 return;
             }
 
-            var exited = process.WaitForExit((clamped + 15) * 1000);
-            GuardLog.Info($"notification balloon shown for {clamped}s exited={exited} code={process.ExitCode}");
+            var exited = process.WaitForExit((seconds + 15) * 1000);
+            GuardLog.Info($"notification card shown for {seconds}s exited={exited} code={process.ExitCode}");
         }
         catch (Exception ex)
         {
