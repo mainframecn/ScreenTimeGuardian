@@ -25,11 +25,23 @@ set "SRC1=publish\service"
 set "SRC2=publish\lockscreen"
 set "SRC3=publish\config"
 if exist "files\ScreenTimeGuardian.Service.exe" (
-    echo      Prebuilt package detected - skipping build, no SDK required.
+    echo      Prebuilt package detected - skipping build, no SDK needed.
     set "SRC1=files"
     set "SRC2=files"
     set "SRC3=files"
     goto :built
+)
+
+:: Neither release layout (files\) nor source layout (src\) is present:
+:: fail with a readable message instead of MSBuild's MSB1009.
+if not exist "src\ScreenTimeGuardian.Service\ScreenTimeGuardian.Service.csproj" (
+    echo.
+    echo ERROR: This folder contains neither files\ nor src\.
+    echo Run install.bat from the COMPLETE extracted release folder -
+    echo install.bat, files\ and INSTALL.txt must sit next to each other.
+    echo.
+    pause
+    exit /b 1
 )
 
 where dotnet >nul 2>&1
