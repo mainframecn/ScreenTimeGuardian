@@ -124,7 +124,10 @@ public static class NotificationManager
             "  $f.TopMost = $true",
             "  $lbl.Text = $title",
             "  $sub.Text = ('{0}  |  locks in {1}s' -f $msg, $left)",
-            "  Start-Sleep -Milliseconds 500",
+            // One decrement per SECOND: the counter is in real seconds (a 119 s
+            // card must live 119 s). A 500 ms sleep here made every card expire
+            // in half its advertised time - users saw cards blink away early.
+            "  Start-Sleep -Milliseconds 1000",
             "  $left--",
             "}",
             "if (-not $f.IsDisposed) { $f.Close() }",
