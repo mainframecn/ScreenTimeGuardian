@@ -17,7 +17,21 @@ if %errorlevel% neq 0 (
     exit /b 1
 )
 
-echo [1/6] Building solution...
+echo [1/6] Getting program files...
+:: Release layout ships a files\ folder with self-contained publishes (no
+:: .NET SDK on the target machine); source layout builds first. The copy
+:: step consumes %SRC1%..3 either way.
+set "SRC1=publish\service"
+set "SRC2=publish\lockscreen"
+set "SRC3=publish\config"
+if exist "files\ScreenTimeGuardian.Service.exe" (
+    echo      Prebuilt package detected - skipping build, no SDK required.
+    set "SRC1=files"
+    set "SRC2=files"
+    set "SRC3=files"
+    goto :built
+)
+
 where dotnet >nul 2>&1
 if %errorlevel% neq 0 (
     echo ERROR: .NET SDK not found!
@@ -46,6 +60,7 @@ if %errorlevel% neq 0 (
     pause
     exit /b 1
 )
+:built
 
 echo [2/6] Replacing installation directory...
 :: Stop the watchdog BEFORE the service: it re-starts the service every minute,
@@ -57,9 +72,9 @@ if exist "%ProgramFiles%\ScreenTimeGuardian" (
     rmdir /s /q "%ProgramFiles%\ScreenTimeGuardian"
 )
 mkdir "%ProgramFiles%\ScreenTimeGuardian" 2>nul
-copy /Y publish\service\* "%ProgramFiles%\ScreenTimeGuardian\" >nul
-copy /Y publish\lockscreen\* "%ProgramFiles%\ScreenTimeGuardian\" >nul
-copy /Y publish\config\* "%ProgramFiles%\ScreenTimeGuardian\" >nul
+copy /Y "%SRC1%\*" "%ProgramFiles%\ScreenTimeGuardian\" >nul
+copy /Y "%SRC2%\*" "%ProgramFiles%\ScreenTimeGuardian\" >nul
+copy /Y "%SRC3%\*" "%ProgramFiles%\ScreenTimeGuardian\" >nul
 
 if not exist "%ProgramFiles%\ScreenTimeGuardian\ScreenTimeGuardian.Service.exe" (
     echo ERROR: service executable missing after copy. Nothing further is installed.
@@ -115,6 +130,31 @@ pause
 exit /b 1
 
 :acl_ok
+
+:: Fresh machine: no settings file yet. Create it HERE with a PIN the parent
+:: picks now - the code default is "123456", and shipping that to a child's
+:: machine would let anyone unlock. Upgrades keep the existing file.
+if exist "%ProgramData%\ScreenTimeGuardian\config.json" goto :pin_ok
+echo.
+echo  First install - choose the parent PIN.
+:askpin
+set "PARENT_PIN="
+set /p PARENT_PIN=  Parent PIN (exactly 6 digits):
+echo(%PARENT_PIN%| findstr /r /c:"^[0-9][0-9][0-9][0-9][0-9][0-9]$" >nul
+if errorlevel 1 (
+    echo      PIN must be exactly 6 digits, digits only.
+    goto :askpin
+)
+set "STGPIN=%PARENT_PIN%"
+powershell -NoProfile -Command "Set-Content -Path \"$env:ProgramData\ScreenTimeGuardian\config.json\" -Value ('{\"UsageDurationMinutes\": 30, \"BreakDurationMinutes\": 15, \"ParentPin\": \"' + $env:STGPIN + '\", \"NotificationsEnabled\": true, \"NotificationWarningMinutes\": 5, \"NotificationUrgentMinutes\": 1}')"
+if not exist "%ProgramData%\ScreenTimeGuardian\config.json" (
+    echo ERROR: could not create %ProgramData%\ScreenTimeGuardian\config.json.
+    pause
+    exit /b 1
+)
+echo      Settings created: 30 min usage, 15 min break, warnings at 5 and 1 min.
+echo      Change them any time in the Config app.
+:pin_ok
 
 echo [6/6] Starting service...
 net start ScreenTimeGuardian
