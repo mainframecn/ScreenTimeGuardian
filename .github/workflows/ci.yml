@@ -60,7 +60,7 @@ jobs:
           if exist "publish-ci\ScreenTimeGuardian.LockScreen.exe" (exit /b 0) else (exit /b 1)
 
       - name: Upload build artifacts
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: ScreenTimeGuardian-build
           path: publish-ci/
