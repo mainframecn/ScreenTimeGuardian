@@ -23,10 +23,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup .NET SDK
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v5
         with:
           dotnet-version: '8.0.4xx'
 
@@ -40,7 +40,7 @@ jobs:
         run: dotnet publish src/ScreenTimeGuardian.Service/ScreenTimeGuardian.Service.csproj -c Release -o ${{ github.workspace }}/publish-ci
 
       - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: ScreenTimeGuardian-build
           path: |
