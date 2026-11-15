@@ -8,6 +8,9 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        // Path in the title: any screenshot of this window identifies exactly
+        // which config file is being read on this machine.
+        Title = $"ScreenTime Guardian - settings ({AppConfig.GetConfigPath()})";
         LoadSettings();
     }
 
@@ -63,8 +66,28 @@ public partial class MainWindow : Window
             config.NotificationWarningMinutes = warningMinutes;
         }
 
-        config.Save();
-        ShowStatus("Settings saved successfully!", false);
+        // An unhandled Save() exception used to kill the window silently:
+        // the user saw nothing, the file stayed untouched and reopening
+        // showed the old values. Name the failure instead.
+        try
+        {
+            config.Save();
+        }
+        catch (Exception ex)
+        {
+            ShowStatus($"Save FAILED: {ex.Message}", true);
+            return;
+        }
+
+        try
+        {
+            IpcMessages.SendCommand(IpcMessages.RELOAD_CONFIG_CMD);
+            ShowStatus("Settings saved and applied.", false);
+        }
+        catch
+        {
+            ShowStatus("Saved, but the running service could not be notified - restart it to apply.", true);
+        }
     }
 
     private void ResetButton_Click(object sender, RoutedEventArgs e)
@@ -75,7 +98,16 @@ public partial class MainWindow : Window
         if (result == MessageBoxResult.Yes)
         {
             var config = new AppConfig();
-            config.Save();
+            try
+            {
+                config.Save();
+                IpcMessages.SendCommand(IpcMessages.RELOAD_CONFIG_CMD);
+            }
+            catch (Exception ex)
+            {
+                ShowStatus($"Reset FAILED: {ex.Message}", true);
+                return;
+            }
             LoadSettings();
             ShowStatus("Settings reset to defaults.", false);
         }

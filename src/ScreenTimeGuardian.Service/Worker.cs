@@ -115,6 +115,13 @@ public class Worker : BackgroundService
                     _processGuardian.StartProtection();
                     _lockController.Lock(config);
                 }
+                else if (command == IpcMessages.RELOAD_CONFIG_CMD)
+                {
+                    // Parent saved settings: pick up new limits, PIN and flags
+                    // live. The usage day is NOT reset - charged time survives.
+                    config = AppConfig.Load();
+                    _timerManager.UpdateConfig(config);
+                }
             }
             catch (Exception ex)
             {
