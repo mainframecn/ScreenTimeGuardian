@@ -11,6 +11,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="System.ServiceProcess.ServiceController" Version="8.0.1" />
     <ProjectReference Include="..\ScreenTimeGuardian.Shared\ScreenTimeGuardian.Shared.csproj" />
   </ItemGroup>
 
