@@ -9,6 +9,9 @@ public static class IpcMessages
     public const string UNLOCK_SCREEN_CMD = "STG_UNLOCK";
     public const string STATUS_REQUEST = "STG_STATUS";
     public const string STATUS_RESPONSE = "STG_STATUS_OK";
+    // Parent saved new settings: the service re-reads config.json and adopts
+    // the limits without a restart (a restart would reset the usage day).
+    public const string RELOAD_CONFIG_CMD = "STG_RELOAD";
 
     // PIN handoff: the overlay must never receive the parent PIN on its
     // command line (visible in process listings). It drops a request marker;
@@ -32,7 +35,7 @@ public static class IpcMessages
     }
 
     // The commands the service knows how to act on. STATUS_* are not dispatched.
-    private static readonly string[] DispatchedCommands = [LOCK_SCREEN_CMD, UNLOCK_SCREEN_CMD, PIN_REQUEST];
+    private static readonly string[] DispatchedCommands = [LOCK_SCREEN_CMD, UNLOCK_SCREEN_CMD, PIN_REQUEST, RELOAD_CONFIG_CMD];
 
     public static void SendCommand(string command)
     {

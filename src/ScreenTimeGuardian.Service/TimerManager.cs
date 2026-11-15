@@ -81,6 +81,19 @@ public class TimerManager
         Start(_config, excludeIdleTime);
     }
 
+    // Parent saved new limits while the service kept running: adopt them in
+    // place. Usage charged so far is preserved (elapsed derives from
+    // _usageStartTime), totals re-evaluate on the next tick, and the warning
+    // flags drop so the new thresholds fire again at the right moments.
+    public void UpdateConfig(AppConfig config)
+    {
+        _config = config;
+        _warning5Sent = false;
+        _warning1Sent = false;
+        _logger?.LogInformation("Config reloaded. Usage limit: {Minutes} min, break: {Break} min",
+            config.UsageDurationMinutes, config.BreakDurationMinutes);
+    }
+
     private void OnUsageTick(object? state)
     {
         if (_isOnBreak) return;
