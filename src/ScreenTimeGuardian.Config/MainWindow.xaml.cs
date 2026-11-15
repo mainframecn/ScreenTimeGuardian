@@ -66,16 +66,32 @@ public partial class MainWindow : Window
             config.NotificationWarningMinutes = warningMinutes;
         }
 
-        // An unhandled Save() exception used to kill the window silently:
-        // the user saw nothing, the file stayed untouched and reopening
-        // showed the old values. Name the failure instead.
+        // Save, with a fallback: a locked/held config.json used to kill the
+        // window unhandled (no status, file untouched). Now: try a live write
+        // first; if that fails, stop the service to release any handle, retry
+        // the write, then start the service again - the restart also loads the
+        // new config, so settings take effect either way.
         try
         {
             config.Save();
         }
-        catch (Exception ex)
+        catch (Exception firstError)
         {
-            ShowStatus($"Save FAILED: {ex.Message}", true);
+            ShowStatus($"Write blocked ({firstError.GetType().Name}) - stopping service, retrying...", false);
+            ServiceControl.TryStop();
+
+            try
+            {
+                config.Save();
+            }
+            catch (Exception ex)
+            {
+                ShowStatus($"Save FAILED even with the service stopped: {ex.Message}", true);
+                return;
+            }
+
+            ServiceControl.Start();
+            ShowStatus("Settings saved. Service restarted with the new settings.", false);
             return;
         }
 
@@ -101,13 +117,40 @@ public partial class MainWindow : Window
             try
             {
                 config.Save();
-                IpcMessages.SendCommand(IpcMessages.RELOAD_CONFIG_CMD);
             }
-            catch (Exception ex)
+            catch (Exception firstError)
             {
-                ShowStatus($"Reset FAILED: {ex.Message}", true);
+                // Same fallback as Save: a held file blocks the write, so stop
+                // the service, retry, then start it again.
+                ShowStatus($"Write blocked ({firstError.GetType().Name}) - stopping service, retrying...", false);
+                ServiceControl.TryStop();
+
+                try
+                {
+                    config.Save();
+                }
+                catch (Exception ex)
+                {
+                    ShowStatus($"Reset FAILED even with the service stopped: {ex.Message}", true);
+                    return;
+                }
+
+                ServiceControl.Start();
+                LoadSettings();
+                ShowStatus("Settings reset to defaults. Service restarted with the new settings.", false);
                 return;
             }
+
+            try
+            {
+                IpcMessages.SendCommand(IpcMessages.RELOAD_CONFIG_CMD);
+            }
+            catch
+            {
+                ShowStatus("Reset, but the running service could not be notified - restart it to apply.", true);
+                return;
+            }
+
             LoadSettings();
             ShowStatus("Settings reset to defaults.", false);
         }
